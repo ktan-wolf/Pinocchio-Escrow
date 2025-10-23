@@ -3,8 +3,9 @@ use crate::Escrow;
 use super::helper;
 use pinocchio::{
     account_info::AccountInfo, instruction::Seed, program_error::ProgramError,
-    pubkey::find_program_address,
+    pubkey::find_program_address, ProgramResult,
 };
+use pinocchio_token::instructions::Transfer;
 use std::mem::size_of;
 
 pub struct MakerAccount<'a> {
@@ -128,5 +129,34 @@ impl<'a> TryFrom<(&'a [u8], &'a [AccountInfo])> for Make<'a> {
             instruction_data,
             bump,
         })
+    }
+}
+
+impl<'a> Make<'a> {
+    pub const DISCRIMINATOR: &'a u8 = &0;
+
+    pub fn process(&mut self) -> ProgramResult {
+        let mut data = self.accounts.escrow.try_borrow_mut_data()?;
+
+        let escrow = Escrow::load_mut(data.as_mut())?;
+
+        escrow.set_inner(
+            self.instruction_data.seed,
+            *self.accounts.maker.key(),
+            *self.accounts.mint_a.key(),
+            *self.accounts.mint_b.key(),
+            self.instruction_data.recieve,
+            [self.bump],
+        );
+
+        Transfer {
+            from: self.accounts.maker_ata_a,
+            to: self.accounts.vault,
+            authority: self.accounts.maker,
+            amount: self.instruction_data.amount,
+        }
+        .invoke()?;
+
+        Ok(())
     }
 }
