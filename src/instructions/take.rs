@@ -1,13 +1,10 @@
-use std::fmt::Pointer;
-
 use pinocchio::{
-    account_info::{self, AccountInfo},
+    account_info::AccountInfo,
     instruction::{Seed, Signer},
     program_error::ProgramError,
     pubkey::create_program_address,
     ProgramResult,
 };
-use pinocchio_system::instructions::CreateAccountWithSeed;
 use pinocchio_token::{
     instructions::{CloseAccount, Transfer},
     state::TokenAccount,
@@ -97,52 +94,6 @@ impl<'a> TryFrom<&'a [AccountInfo]> for Take<'a> {
     }
 }
 
-// impl<'a> Take<'a> {
-//     pub const DISCRIMINATOR: &'a u8 = &1;
-//
-//     pub fn process(&mut self) -> ProgramResult {
-//         let data = self.accounts.escrow.try_borrow_data()?;
-//
-//         let escrow = Escrow::load(&data)?;
-//
-//         let escrow_key = create_program_address(
-//             &[b"escrow", self.accounts.maker.key(), &escrow.bump],
-//             &crate::ID,
-//         )?;
-//
-//         if &escrow_key != self.accounts.escrow.key() {
-//             return Err(ProgramError::InvalidAccountOwner);
-//         }
-//
-//         let seed_binding = escrow.seed.to_le_bytes();
-//         let bump_binding = escrow.bump;
-//         let escrow_seeds = [
-//             Seed::from(b"escrow"),
-//             Seed::from(self.accounts.maker.key().as_ref()),
-//             Seed::from(&seed_binding),
-//             Seed::from(&bump_binding),
-//         ];
-//
-//         let signer = Signer::from(&escrow_seeds);
-//
-//         let amount = TokenAccount::get_amount(self.accounts.vault);
-//
-//         Transfer {
-//             from: self.accounts.taker_ata_b,
-//             to: self.accounts.maker_ata_b,
-//             authority: self.accounts.taker,
-//             amount: escrow.receive,
-//         }
-//         .invoke()?;
-//
-//         //escrow closing
-//         drop(data);
-//         helper::ProgramAccount::close(self.accounts.escrow, self.accounts.taker)?;
-//
-//         Ok(())
-//     }
-// }
-//
 impl<'a> Take<'a> {
     pub const DISCRIMINATOR: &'a u8 = &1;
 
@@ -174,7 +125,9 @@ impl<'a> Take<'a> {
         ];
         let signer = Signer::from(&escrow_seeds);
 
-        let amount = TokenAccount::get_amount(self.accounts.vault);
+        let vault_data = TokenAccount::from_account_info(self.accounts.vault)?;
+
+        let amount = TokenAccount::amount(&vault_data);
 
         // Transfer from the Vault to the Taker
         Transfer {

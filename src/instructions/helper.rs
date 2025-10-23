@@ -1,5 +1,5 @@
 use pinocchio::{
-    account_info::{self, AccountInfo},
+    account_info::AccountInfo,
     instruction::{Seed, Signer},
     program_error::ProgramError,
     pubkey::find_program_address,

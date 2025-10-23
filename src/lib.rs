@@ -23,7 +23,7 @@ fn process_instruction(
 ) -> ProgramResult {
     match instruction_data.split_first() {
         Some((Make::DISCRIMINATOR, data)) => Make::try_from((data, accounts))?.process(),
-        //Some((Take::DISCRIMINATOR, _)) => Take::try_from(accounts)?.process(),
+        Some((Take::DISCRIMINATOR, _)) => Take::try_from(accounts)?.process(),
         //Some((Refund::DISCRIMINATOR, _)) => Refund::try_from(accounts)?.process(),
         _ => Err(ProgramError::InvalidInstructionData),
     }
