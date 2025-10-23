@@ -1,6 +1,13 @@
 use pinocchio::{
-    account_info::AccountInfo, program_error::ProgramError, pubkey::find_program_address,
+    account_info::AccountInfo,
+    instruction::{Seed, Signer},
+    program_error::ProgramError,
+    pubkey::find_program_address,
+    sysvars::{rent::Rent, Sysvar},
+    ProgramResult,
 };
+use pinocchio_associated_token_account::instructions::Create;
+use pinocchio_system::instructions::CreateAccount;
 use pinocchio_token::state::TokenAccount;
 
 pub struct SignerAccount<'a> {
@@ -84,6 +91,53 @@ impl AssociatedToken {
         {
             return Err(ProgramError::InvalidAccountData);
         }
+
+        Ok(())
+    }
+
+    pub fn init(
+        account: &AccountInfo,
+        mint: &AccountInfo,
+        payer: &AccountInfo,
+        owner: &AccountInfo,
+        system_program: &AccountInfo,
+        token_program: &AccountInfo,
+    ) -> Result<(), ProgramError> {
+        Create {
+            funding_account: payer,
+            account,
+            wallet: owner,
+            mint,
+            system_program,
+            token_program,
+        }
+        .invoke()?;
+
+        Ok(())
+    }
+}
+
+pub struct ProgramAccount;
+
+impl ProgramAccount {
+    pub fn init<'a, T: Sized>(
+        payer: &AccountInfo,
+        account: &AccountInfo,
+        seeds: &[Seed<'a>],
+        space: usize,
+    ) -> ProgramResult {
+        let lamports = Rent::get()?.minimum_balance(space);
+
+        let signer = [Signer::from(seeds)];
+
+        CreateAccount {
+            from: payer,
+            to: account,
+            lamports,
+            space: space as u64,
+            owner: &crate::ID,
+        }
+        .invoke_signed(&signer)?;
 
         Ok(())
     }

@@ -1,6 +1,11 @@
-use pinocchio::{account_info::AccountInfo, program_error::ProgramError, ProgramResult};
+use crate::Escrow;
 
 use super::helper;
+use pinocchio::{
+    account_info::AccountInfo, instruction::Seed, program_error::ProgramError,
+    pubkey::find_program_address,
+};
+use std::mem::size_of;
 
 pub struct MakerAccount<'a> {
     pub maker: &'a AccountInfo,
@@ -37,6 +42,91 @@ impl<'a> TryFrom<&'a [AccountInfo]> for MakerAccount<'a> {
             vault,
             system_program,
             token_program,
+        })
+    }
+}
+
+pub struct MakeInstructionData {
+    pub seed: u64,
+    pub recieve: u64,
+    pub amount: u64,
+}
+
+impl<'a> TryFrom<&'a [u8]> for MakeInstructionData {
+    type Error = ProgramError;
+
+    fn try_from(data: &'a [u8]) -> Result<Self, Self::Error> {
+        if data.len() != size_of::<u64>() * 3 {
+            return Err(ProgramError::InvalidInstructionData);
+        }
+
+        let seed = u64::from_le_bytes(data[0..8].try_into().unwrap());
+        let recieve = u64::from_le_bytes(data[8..16].try_into().unwrap());
+        let amount = u64::from_le_bytes(data[16..24].try_into().unwrap());
+
+        if amount == 0 {
+            return Err(ProgramError::InvalidInstructionData);
+        }
+
+        Ok(Self {
+            seed,
+            recieve,
+            amount,
+        })
+    }
+}
+
+pub struct Make<'a> {
+    pub accounts: MakerAccount<'a>,
+    pub instruction_data: MakeInstructionData,
+    pub bump: u8,
+}
+
+impl<'a> TryFrom<(&'a [u8], &'a [AccountInfo])> for Make<'a> {
+    type Error = ProgramError;
+
+    fn try_from((data, accounts): (&'a [u8], &'a [AccountInfo])) -> Result<Self, Self::Error> {
+        let accounts = MakerAccount::try_from(accounts)?;
+        let instruction_data = MakeInstructionData::try_from(data)?;
+
+        let (_, bump) = find_program_address(
+            &[
+                b"escrow",
+                accounts.maker.key(),
+                &instruction_data.seed.to_le_bytes(),
+            ],
+            &crate::ID,
+        );
+
+        let seed_binding = instruction_data.seed.to_le_bytes();
+        let bump_binding = [bump];
+        let escrow_seeds = [
+            Seed::from(b"escrow"),
+            Seed::from(accounts.maker.key().as_ref()),
+            Seed::from(&seed_binding),
+            Seed::from(&bump_binding),
+        ];
+
+        helper::ProgramAccount::init::<Escrow>(
+            accounts.maker,
+            accounts.escrow,
+            &escrow_seeds,
+            Escrow::LEN,
+        )?;
+
+        helper::AssociatedToken::init(
+            accounts.vault,
+            accounts.mint_a,
+            accounts.maker,
+            accounts.escrow,
+            accounts.system_program,
+            accounts.token_program,
+        )?;
+
+        Ok(Self {
+            accounts,
+            instruction_data,
+            bump,
         })
     }
 }
