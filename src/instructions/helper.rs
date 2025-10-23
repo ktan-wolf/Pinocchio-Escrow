@@ -1,5 +1,5 @@
 use pinocchio::{
-    account_info::AccountInfo,
+    account_info::{self, AccountInfo},
     instruction::{Seed, Signer},
     program_error::ProgramError,
     pubkey::find_program_address,
@@ -115,11 +115,33 @@ impl AssociatedToken {
 
         Ok(())
     }
+
+    pub fn init_if_needed(
+        account: &AccountInfo,
+        mint: &AccountInfo,
+        payer: &AccountInfo,
+        owner: &AccountInfo,
+        system_program: &AccountInfo,
+        token_program: &AccountInfo,
+    ) -> ProgramResult {
+        match Self::check(account, payer, mint, token_program) {
+            Ok(_) => Ok(()),
+            Err(_) => Self::init(account, mint, payer, owner, system_program, token_program),
+        }
+    }
 }
 
 pub struct ProgramAccount;
 
 impl ProgramAccount {
+    pub fn check(account: &AccountInfo) -> Result<(), ProgramError> {
+        if !account.is_owned_by(&crate::ID) {
+            return Err(ProgramError::InvalidAccountOwner);
+        }
+
+        Ok(())
+    }
+
     pub fn init<'a, T: Sized>(
         payer: &AccountInfo,
         account: &AccountInfo,
@@ -140,5 +162,16 @@ impl ProgramAccount {
         .invoke_signed(&signer)?;
 
         Ok(())
+    }
+
+    pub fn close(account: &AccountInfo, destination: &AccountInfo) -> ProgramResult {
+        {
+            let mut data = account.try_borrow_mut_data()?;
+            data[0] = 0xff;
+        }
+
+        *destination.try_borrow_mut_lamports()? += *account.try_borrow_lamports()?;
+        account.realloc(1, true)?;
+        account.close()
     }
 }
