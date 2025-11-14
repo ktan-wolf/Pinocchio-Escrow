@@ -1,3 +1,5 @@
+use std::pin::Pin;
+
 use pinocchio::{
     account_info::AccountInfo,
     instruction::{Seed, Signer},
@@ -62,6 +64,37 @@ impl<'a> MintInterface<'a> {
         }
 
         Ok(Self { mint })
+    }
+}
+
+pub struct TokenAccounts;
+
+impl TokenAccounts {
+    fn check(account: &AccountInfo) -> Result<(), ProgramError> {
+        if !account.is_owned_by(&pinocchio_token::ID) {
+            return Err(ProgramError::InvalidAccountOwner);
+        }
+
+        if account
+            .data_len()
+            .ne(&pinocchio_token::state::TokenAccount::LEN)
+        {
+            return Err(ProgramError::InvalidAccountData);
+        }
+
+        Ok(())
+    }
+
+    pub fn get_amount(account: &AccountInfo) -> Result<u64, ProgramError> {
+        Self::check(account)?;
+
+        let data = account.try_borrow_data()?;
+
+        let amount_bytes: [u8; 8] = data[64..72]
+            .try_into()
+            .map_err(|_| ProgramError::InvalidAccountData)?;
+
+        Ok(u64::from_le_bytes(amount_bytes))
     }
 }
 

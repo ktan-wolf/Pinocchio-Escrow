@@ -43,7 +43,7 @@ impl<'a> TryFrom<&'a [AccountInfo]> for TakeAccounts<'a> {
         helper::ProgramAccount::check(escrow)?;
         helper::MintInterface::check(mint_a)?;
         helper::MintInterface::check(mint_b)?;
-        helper::AssociatedToken::check(taker_ata_a, taker, mint_b, token_program)?;
+        helper::AssociatedToken::check(taker_ata_b, taker, mint_b, token_program)?;
         helper::AssociatedToken::check(vault, escrow, mint_a, token_program)?;
 
         Ok(Self {
@@ -52,10 +52,10 @@ impl<'a> TryFrom<&'a [AccountInfo]> for TakeAccounts<'a> {
             escrow,
             mint_a,
             mint_b,
+            vault,
             taker_ata_a,
             taker_ata_b,
             maker_ata_b,
-            vault,
             system_program,
             token_program,
         })
@@ -85,7 +85,7 @@ impl<'a> TryFrom<&'a [AccountInfo]> for Take<'a> {
             accounts.maker_ata_b,
             accounts.mint_b,
             accounts.taker,
-            accounts.maker_ata_b,
+            accounts.maker,
             accounts.system_program,
             accounts.token_program,
         )?;
@@ -125,9 +125,10 @@ impl<'a> Take<'a> {
         ];
         let signer = Signer::from(&escrow_seeds);
 
-        let vault_data = TokenAccount::from_account_info(self.accounts.vault)?;
-
-        let amount = TokenAccount::amount(&vault_data);
+        let amount = {
+            let vault = TokenAccount::from_account_info(self.accounts.vault)?;
+            vault.amount()
+        };
 
         // Transfer from the Vault to the Taker
         Transfer {
@@ -144,7 +145,7 @@ impl<'a> Take<'a> {
             destination: self.accounts.maker,
             authority: self.accounts.escrow,
         }
-        .invoke_signed(&[signer.clone()])?;
+        .invoke_signed(&[signer])?;
 
         // Transfer from the Taker to the Maker
         Transfer {
